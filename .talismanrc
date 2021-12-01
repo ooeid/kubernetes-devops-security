@@ -2,3 +2,7 @@ fileignoreconfig:
 - filename: Jenkinsfile
   checksum: 1947c10e1294bbce47f441cb1e0b0055e11f3b41f7e2c485a9f1efc947cf2f88
   ignore_detectors: [filename, filesize]
+
+- filename: zap.sh
+  checksum: be2ef900f11bf5880881d609b7e9af71c39c68bc3ea40cafb43041b39f4bf8ca
+  ignore_detectors: [filename, filesize]
