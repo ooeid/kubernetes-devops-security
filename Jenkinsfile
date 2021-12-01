@@ -1,3 +1,4 @@
+
 pipeline {
   agent any
 
@@ -6,7 +7,7 @@ pipeline {
     containerName = "devsecops-container"
     serviceName = "devsecops-svc"
     imageName = "siddharth67/numeric-app:${GIT_COMMIT}"
-    applicationURL = "http://devsecops-demo.eastus.cloudapp.azure.com/"
+    applicationURL = "http://devsecops-demo.eastus.cloudapp.azure.com"
     applicationURI = "/increment/99"
   }
 
@@ -28,6 +29,21 @@ pipeline {
     stage('Mutation Tests - PIT') {
       steps {
         sh "mvn org.pitest:pitest-maven:mutationCoverage"
+      }
+    }
+
+    stage('SonarQube - SAST') {
+      steps {
+        withSonarQubeEnv('SonarQube') {
+          sh "mvn sonar:sonar \
+		              -Dsonar.projectKey=numeric-application \
+		              -Dsonar.host.url=http://devsecops-demo.eastus.cloudapp.azure.com:9000"
+        }
+        timeout(time: 2, unit: 'MINUTES') {
+          script {
+            waitForQualityGate abortPipeline: true
+          }
+        }
       }
     }
 
@@ -57,7 +73,6 @@ pipeline {
       }
     }
 
-
     stage('Vulnerability Scan - Kubernetes') {
       steps {
         parallel(
@@ -66,11 +81,13 @@ pipeline {
           },
           "Kubesec Scan": {
             sh "bash kubesec-scan.sh"
+          },
+          "Trivy Scan": {
+            sh "bash trivy-k8s-scan.sh"
           }
         )
       }
     }
-
 
     stage('K8S Deployment - DEV') {
       steps {
@@ -80,18 +97,11 @@ pipeline {
               sh "bash k8s-deployment.sh"
             }
           },
-          // "Rollout Status": {
-          //   withKubeConfig([credentialsId: 'kubeconfig']) {
-          //     sh "bash k8s-deployment-rollout-status.sh"
-          //   }
-          // }
         )
       }
     }
 
-  }
-
-     stage('OWASP ZAP - DAST') {
+    stage('OWASP ZAP - DAST') {
       steps {
         withKubeConfig([credentialsId: 'kubeconfig']) {
           sh 'bash zap.sh'
@@ -99,7 +109,7 @@ pipeline {
       }
     }
 
-  
+  }
 
   post {
     always {
@@ -107,9 +117,16 @@ pipeline {
       jacoco execPattern: 'target/jacoco.exec'
       pitmutation mutationStatsFile: '**/target/pit-reports/**/mutations.xml'
       dependencyCheckPublisher pattern: 'target/dependency-check-report.xml'
+      publishHTML([allowMissing: false, alwaysLinkToLastBuild: true, keepAll: true, reportDir: 'owasp-zap-report', reportFiles: 'zap_report.html', reportName: 'OWASP ZAP HTML Report', reportTitles: 'OWASP ZAP HTML Report'])
     }
 
+    // success {
 
+    // }
+
+    // failure {
+
+    // }
   }
 
 }
